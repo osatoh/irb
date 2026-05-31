@@ -232,6 +232,33 @@ module TestIRB
         assert_equal(["::Forwardable"], completion_candidates("::Fo", binding))
         assert_equal("Forwardable", doc_namespace("::Forwardable", binding))
       end
+
+      def test_complete_constants_after_expression_prefix
+        test_cases = {
+          "[Fo" => "[Foo",
+          "+Fo" => "+Foo",
+          "-Fo" => "-Foo",
+          "1/Fo" => "1/Foo",
+          "s%Fo" => "s%Foo",
+          "!Fo" => "!Foo",
+          "~Fo" => "~Foo",
+          "1?Fo" => "1?Foo",
+          "1?2:Fo" => "1?2:Foo",
+          "1^Fo" => "1^Foo",
+          "1**Fo" => "1**Foo",
+          "1..Fo" => "1..Foo",
+          "1...Fo" => "1...Foo",
+        }
+
+        test_cases.each do |target, expected|
+          assert_include(completion_candidates(target, binding), expected)
+        end
+
+        completor = IRB::RegexpCompletor.new
+        assert_include(completor.completion_candidates("puts(", "*Fo", "", bind: binding), "*Foo")
+        assert_include(completor.completion_candidates("p(", "1,Fo", "", bind: binding), "1,Foo")
+        assert_equal("Foo", doc_namespace("[Foo", binding))
+      end
     end
 
     def test_not_completing_empty_string
