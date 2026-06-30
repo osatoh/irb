@@ -223,17 +223,27 @@ module IRB
       # It doesn't make sense to propose commands with other preposing
       commands = [] unless preposing.empty?
 
-      completion_data = retrieve_completion_data(target, bind: bind, doc_namespace: false).compact.filter_map do |i|
-        i.encode(Encoding.default_external)
-      rescue Encoding::UndefinedConversionError
-        # If the string cannot be converted, we just ignore it
-        nil
+      expression_target = expression_prefix_completion_target(target)
+      completion_data = if expression_target
+        completion_data_with_expression_prefix(*expression_target, bind: bind)
+      else
+        retrieve_completion_data(target, bind: bind, doc_namespace: false).compact.filter_map do |i|
+          i.encode(Encoding.default_external)
+        rescue Encoding::UndefinedConversionError
+          # If the string cannot be converted, we just ignore it
+          nil
+        end
       end
       commands | completion_data
     end
 
     def doc_namespace(preposing, matched, _postposing, bind:)
-      command_document_target(preposing, matched) || retrieve_completion_data(matched, bind: bind, doc_namespace: true)
+      command_target = command_document_target(preposing, matched)
+      return command_target if command_target
+
+      expression_target = expression_prefix_completion_target(matched)
+      matched = expression_target.last if expression_target
+      retrieve_completion_data(matched, bind: bind, doc_namespace: true)
     end
 
     def retrieve_completion_data(input, bind:, doc_namespace:)
@@ -485,6 +495,24 @@ module IRB
           candidates.grep(/^#{Regexp.quote(input)}/).sort
         end
       end
+    end
+
+    def completion_data_with_expression_prefix(prefix, target, bind:)
+      retrieve_completion_data(target, bind: bind, doc_namespace: false).compact.filter_map do |candidate|
+        "#{prefix}#{candidate}".encode(Encoding.default_external)
+      rescue Encoding::UndefinedConversionError
+        nil
+      end
+    end
+
+    def expression_prefix_completion_target(input)
+      return unless input =~ /\A(?<prefix>.+?)(?<target>@@?[A-Za-z_]\w*|\$[A-Za-z_]\w*|[A-Za-z_]\w*)\z/
+
+      prefix = $~[:prefix]
+      target = $~[:target]
+      return if prefix == ':' || prefix.end_with?('::')
+      return [prefix, target] if prefix.end_with?('...', '..')
+      return [prefix, target] if prefix.end_with?('[', '+', '-', '*', '/', '%', '!', '~', ',', '?', ':', '^')
     end
 
     # Set of available operators in Ruby
